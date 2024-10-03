@@ -25,12 +25,12 @@ public class MapeoController {
     }
 
     @DeleteMapping("/delete/{atributoId}")
-    public ResponseEntity<ReqRes> deleteUSer(@PathVariable int atributoId){
+    public ResponseEntity<ReqRes> deleteAtributo(@PathVariable int atributoId){
         return ResponseEntity.ok(mapeoService.deleteAtributo(atributoId));
     }
 
     @PostMapping("/normalizar")
-    public ResponseEntity<ReqRes> refreshToken(@RequestBody ReqRes req){
+    public ResponseEntity<ReqRes> normalizar(@RequestBody ReqRes req){
         return ResponseEntity.ok(mapeoService.normalizar(req));
     }
 }

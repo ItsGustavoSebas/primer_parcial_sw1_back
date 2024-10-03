@@ -110,4 +110,14 @@ public class ProyectoController {
         return ResponseEntity.ok(proyectoService.enviarInvitacion(req));
     }
 
+    @DeleteMapping("/delete/{tablaId}")
+    public ResponseEntity<ReqRes> deleteTabla(@PathVariable int tablaId){
+        return ResponseEntity.ok(proyectoService.deleteTabla(tablaId));
+    }
+
+    @DeleteMapping("/deleteRelacion/{relacionId}")
+    public ResponseEntity<ReqRes> deleteRelacion(@PathVariable int relacionId){
+        return ResponseEntity.ok(proyectoService.deleteRelacion(relacionId));
+    }
+
 }

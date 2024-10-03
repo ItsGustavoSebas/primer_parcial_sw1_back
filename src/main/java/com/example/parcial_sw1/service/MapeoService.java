@@ -111,7 +111,7 @@ public class MapeoService {
         try {
             Optional<Atributo> atributoOpcional = atributoRepo.findById(atributoId);
             if (atributoOpcional.isPresent()) {
-                atributoRepo.deleteById(atributoId);
+                    atributoRepo.deleteById(atributoId);
                 reqRes.setStatusCode(200);
                 reqRes.setMessage("Atributo deleted successfully");
             } else {

@@ -25,45 +25,25 @@ public class ORMService {
     public String generarEntidadesEnCopia(int proyectoId) throws Exception {
         Proyecto proyecto = proyectoRepo.findById(proyectoId)
                 .orElseThrow(() -> new Exception("Proyecto no encontrado"));
-
-        // Ruta original y ruta para la copia del proyecto
         String rutaOriginal = "/exportar/proyectonuevo";
         String rutaZip = "/exportar/zips";
         String rutaCopia = "/exportar/proyectonuevo_copia";
-
-        // Crear una copia del proyecto
         copiarProyecto(rutaOriginal, rutaCopia);
-
-        // Rutas de la copia para la generación de entidades, repositorios, servicios y controladores
         String rutaBaseEntity = rutaCopia + "/src/main/java/com/nuevo/proyectonuevo/entity";
         String rutaBaseRepository = rutaCopia + "/src/main/java/com/nuevo/proyectonuevo/repository";
         String rutaBaseService = rutaCopia + "/src/main/java/com/nuevo/proyectonuevo/service";
         String rutaBaseController = rutaCopia + "/src/main/java/com/nuevo/proyectonuevo/controller";
-
-        // Crear los directorios en la copia si no existen
         crearDirectorioProyecto(rutaBaseEntity);
         crearDirectorioProyecto(rutaBaseRepository);
         crearDirectorioProyecto(rutaBaseService);
         crearDirectorioProyecto(rutaBaseController);
-
-        // Obtener las tablas del proyecto original
-        List<Tabla> tablas = proyecto.getTablas();
-
-        // Generar las entidades, repositorios, servicios y controladores en la copia
+            List<Tabla> tablas = proyecto.getTablas();
         for (Tabla tabla : tablas) {
             String tableName = tabla.getName();
             String formattedTableName = tableName.substring(0, 1).toUpperCase() + tableName.substring(1).toLowerCase();
-
-            // Generar la entidad
             generarEntidad(tabla, rutaBaseEntity, formattedTableName);
-
-            // Generar el repositorio
             generarRepository(rutaBaseRepository, formattedTableName);
-
-            // Generar el servicio
             generarService(rutaBaseService, formattedTableName, tabla);
-
-            // Generar el controlador
             generarController(rutaBaseController, formattedTableName);
         }
         comprimirDirectorio(rutaCopia, rutaZip);
@@ -78,12 +58,10 @@ public class ORMService {
                 String zipEntryName = dir.relativize(sourcePath).toString();
                 try {
                     if (Files.isDirectory(sourcePath)) {
-                        // Si es un directorio, solo añade la entrada
                         if (!zipEntryName.isEmpty()) {
                             zos.putNextEntry(new ZipEntry(zipEntryName + "/"));
                         }
                     } else {
-                        // Si es un archivo, añade la entrada y escribe su contenido
                         zos.putNextEntry(new ZipEntry(zipEntryName));
                         Files.copy(sourcePath, zos);
                     }
@@ -98,26 +76,18 @@ public class ORMService {
     public void copiarProyecto(String rutaOriginal, String rutaDestino) throws IOException {
         Path origen = Paths.get(rutaOriginal);
         Path destino = Paths.get(rutaDestino);
-
-        // Si el directorio destino ya existe, eliminarlo
         if (Files.exists(destino)) {
             eliminarDirectorio(destino);
         }
-
-        // Volver a crear el directorio destino
         Files.createDirectories(destino);
-
-        // Copiar todos los archivos y directorios desde el origen al destino
         Files.walk(origen).forEach(sourcePath -> {
             try {
                 Path destinoPath = destino.resolve(origen.relativize(sourcePath));
-                // Crear directorios en el destino si es necesario
                 if (Files.isDirectory(sourcePath)) {
                     if (!Files.exists(destinoPath)) {
                         Files.createDirectories(destinoPath);
                     }
                 } else {
-                    // Copiar archivos
                     Files.copy(sourcePath, destinoPath, StandardCopyOption.REPLACE_EXISTING);
                 }
             } catch (IOException e) {
@@ -133,7 +103,6 @@ public class ORMService {
                 Files.delete(file);
                 return FileVisitResult.CONTINUE;
             }
-
             @Override
             public FileVisitResult postVisitDirectory(Path dir, IOException exc) throws IOException {
                 Files.delete(dir);
@@ -142,14 +111,13 @@ public class ORMService {
         });
     }
 
-
-    // Función para generar la entidad (similar a la que ya tienes)
     private void generarEntidad(Tabla tabla, String rutaBase, String formattedTableName) throws IOException {
         StringBuilder sb = new StringBuilder();
         sb.append("package com.nuevo.proyectonuevo.entity;\n\n");
-        sb.append("import javax.persistence.*;\n");
-        sb.append("import lombok.Getter;\n");
-        sb.append("import lombok.Setter;\n\n");
+        sb.append("import jakarta.persistence.*;\n");
+        sb.append("import com.fasterxml.jackson.annotation.JsonIgnore;\n");
+        sb.append("import lombok.*;\n");
+        sb.append("import java.util.*;\n");
         sb.append("@Setter\n");
         sb.append("@Getter\n");
         sb.append("@Entity\n");
@@ -171,17 +139,18 @@ public class ORMService {
         sb.append("\n");
 
         for (Relacion relacion : tabla.getRelacionesTarget()) {
-            if (esRelacionOneToMany(relacion)) {
+            if (esRelacionManyToOne(relacion)) {
                 String tableSourceName = relacion.getTablaSource().getName().toLowerCase();
-                sb.append("    @OneToMany\n");
+                sb.append("    @ManyToOne\n");
                 sb.append("    @JoinColumn(name = \"").append(tableSourceName).append("_id\")\n");
                 String formattedTableSourceName = tableSourceName.substring(0, 1).toUpperCase() + tableSourceName.substring(1);
                 sb.append("    private ").append(formattedTableSourceName).append(" ").append(tableSourceName).append(";\n\n");
 
-            } else if (esRelacionManyToOne(relacion)) {
+            } else if (esRelacionOneToMany(relacion)) {
                 String tableSourceName = relacion.getTablaSource().getName().toLowerCase();
-                sb.append("    @ManyToOne(mappedBy = \"").append(tabla.getName().toLowerCase()).append("\", cascade = CascadeType.ALL, orphanRemoval = true)\n\n");
+                sb.append("    @OneToMany(mappedBy = \"").append(tabla.getName().toLowerCase()).append("\", cascade = CascadeType.ALL, orphanRemoval = true)\n");
                 String formattedTableSourceName = tableSourceName.substring(0, 1).toUpperCase() + tableSourceName.substring(1);
+                sb.append("    @JsonIgnore");
                 sb.append("    private List<").append(formattedTableSourceName).append("> ").append(tableSourceName).append("s;\n\n");
             }
         }
@@ -189,10 +158,10 @@ public class ORMService {
         for (Relacion relacion : tabla.getRelacionesSource()) {
             if (esRelacionOneToManySource(relacion)) {
                 String tableTargetName = relacion.getTablaTarget().getName().toLowerCase();
-                sb.append("    @OneToMany\n");
-                sb.append("    @JoinColumn(name = \"").append(tableTargetName).append("_id\")\n");
+                sb.append("    @OneToMany(mappedBy = \"").append(tabla.getName().toLowerCase()).append("\", cascade = CascadeType.ALL, orphanRemoval = true)\n");
                 String formattedTableTargetName = tableTargetName.substring(0, 1).toUpperCase() + tableTargetName.substring(1);
-                sb.append("    private List<").append(formattedTableTargetName).append("> ").append(tableTargetName).append(";\n\n");
+                sb.append("    @JsonIgnore");
+                sb.append("    private List<").append(formattedTableTargetName).append("> ").append(tableTargetName).append("s;\n\n");
 
             } else if (esRelacionManyToOneSource(relacion)) {
                 String tableTargetName = relacion.getTablaTarget().getName().toLowerCase();
@@ -211,7 +180,6 @@ public class ORMService {
             }
         }
         sb.append("}\n");
-        // Guardar el archivo en el proyecto
         String rutaArchivo = rutaBase + "/"+ formattedTableName  + ".java";
         try (FileWriter writer = new FileWriter(rutaArchivo)) {
             writer.write(sb.toString());
@@ -220,7 +188,6 @@ public class ORMService {
         }
     }
 
-    // Función para generar el repositorio
     private void generarRepository(String rutaBase, String formattedTableName) throws IOException {
         StringBuilder sb = new StringBuilder();
         sb.append("package com.nuevo.proyectonuevo.repository;\n\n");
@@ -236,7 +203,6 @@ public class ORMService {
         }
     }
 
-    // Función para generar el servicio
     private void generarService(String rutaBase, String formattedTableName, Tabla tabla) throws IOException {
         StringBuilder sb = new StringBuilder();
         sb.append("package com.nuevo.proyectonuevo.service;\n\n");
@@ -251,7 +217,7 @@ public class ORMService {
         sb.append("    @Autowired\n");
         sb.append("    private ").append(formattedTableName).append("Repository repository;\n\n");
         for (Relacion relacion : tabla.getRelacionesTarget()) {
-            if (esRelacionOneToMany(relacion)) {
+            if (esRelacionManyToOne(relacion)) {
                 String tableSourceName = relacion.getTablaSource().getName().toLowerCase();
                 String formattedTableTargetName = tableSourceName.substring(0, 1).toUpperCase() + tableSourceName.substring(1);
                 sb.append("    @Autowired\n");
@@ -259,7 +225,7 @@ public class ORMService {
             }
         }
         for (Relacion relacion : tabla.getRelacionesSource()) {
-            if (esRelacionOneToManySource(relacion) || esRelacionOneToOneSource(relacion)) {
+            if (esRelacionManyToOneSource(relacion) || esRelacionOneToOneSource(relacion)) {
                 String tableTargetName = relacion.getTablaTarget().getName().toLowerCase();
                 String formattedTableTargetName = tableTargetName.substring(0, 1).toUpperCase() + tableTargetName.substring(1);
                 sb.append("    @Autowired\n");
@@ -276,11 +242,13 @@ public class ORMService {
         sb.append("    public ").append(formattedTableName).append(" save(").append(formattedTableName).append(" entity) {\n");
         sb.append("        ").append(formattedTableName).append(" nuevo").append(formattedTableName).append(" = new ").append(formattedTableName).append("();\n");
         for (Atributo atributo : tabla.getAtributos()) {
-            sb.append("        nuevo").append(formattedTableName).append(".set").append(atributo.getNombre()).append("(entity.get").append(atributo.getNombre()).append("());\n");
+            String nombreAtributo = atributo.getNombre();
+            String nombreFormateado = nombreAtributo.substring(0, 1).toUpperCase() + nombreAtributo.substring(1).toLowerCase();
+            sb.append("        nuevo").append(formattedTableName).append(".set").append(nombreFormateado).append("(entity.get").append(nombreFormateado).append("());\n");
 
         }
         for (Relacion relacion : tabla.getRelacionesTarget()) {
-            if (esRelacionOneToMany(relacion)) {
+            if (esRelacionManyToOne(relacion)) {
                 String tableSourceName = relacion.getTablaSource().getName().toLowerCase();
                 String formattedTableSourceName = tableSourceName.substring(0, 1).toUpperCase() + tableSourceName.substring(1);
                 sb.append("        ").append(formattedTableSourceName).append(" ").append(tableSourceName).append(" = ")
@@ -290,7 +258,7 @@ public class ORMService {
             }
         }
         for (Relacion relacion : tabla.getRelacionesSource()) {
-            if (esRelacionOneToManySource(relacion) || esRelacionOneToOneSource(relacion)) {
+            if (esRelacionManyToOneSource(relacion) || esRelacionOneToOneSource(relacion)) {
                 String tableTargetName = relacion.getTablaTarget().getName().toLowerCase();
                 String formattedTableTargetName = tableTargetName.substring(0, 1).toUpperCase() + tableTargetName.substring(1);
                 sb.append("        ").append(formattedTableTargetName).append(" ").append(tableTargetName).append(" = ")
@@ -305,25 +273,30 @@ public class ORMService {
         sb.append("        ").append(formattedTableName).append(" existente").append(formattedTableName).append(" = repository.findById(id)\n");
         sb.append("                .orElseThrow(() -> new RuntimeException(\"").append(formattedTableName).append(" no encontrado: \" + id));\n");
         for (Atributo atributo : tabla.getAtributos()) {
-            sb.append("        existente").append(formattedTableName).append(".set").append(atributo.getNombre()).append("(entity.get").append(atributo.getNombre()).append("());\n");
+            String nombreAtributo = atributo.getNombre();
+            String nombreFormateado = nombreAtributo.substring(0, 1).toUpperCase() + nombreAtributo.substring(1).toLowerCase();
+            sb.append("        existente").append(formattedTableName)
+                    .append(".set").append(nombreFormateado)
+                    .append("(entity.get").append(nombreFormateado).append("());\n");
+
         }
         for (Relacion relacion : tabla.getRelacionesTarget()) {
-            if (esRelacionOneToMany(relacion)) {
+            if (esRelacionManyToOne(relacion)) {
                 String tableSourceName = relacion.getTablaSource().getName().toLowerCase();
-                String formattedTableSourceName = tableSourceName.substring(0, 1).toUpperCase() + relacion.getSourceName().substring(1);
+                String formattedTableSourceName = tableSourceName.substring(0, 1).toUpperCase() + tableSourceName.substring(1);
                 sb.append("        ").append(formattedTableSourceName).append(" ").append(tableSourceName).append(" = ")
                         .append(tableSourceName).append("Repository.findById(entity.get").append(formattedTableSourceName).append("().getId())\n");
-                sb.append("                .orElseThrow(() -> new RuntimeException(\"").append(tableSourceName).append(" no encontrado: \" + entity.get").append(formattedTableSourceName).append("().getNombre()));\n");
+                sb.append("                .orElseThrow(() -> new RuntimeException(\"").append(tableSourceName).append(" no encontrado: \" + entity.get").append(formattedTableSourceName).append("().getId()));\n");
                 sb.append("        existente").append(formattedTableName).append(".set").append(formattedTableSourceName).append("(").append(tableSourceName).append(");\n");
             }
         }
         for (Relacion relacion : tabla.getRelacionesSource()) {
-            if (esRelacionOneToManySource(relacion) || esRelacionOneToOneSource(relacion)) {
+            if (esRelacionManyToOneSource(relacion) || esRelacionOneToOneSource(relacion)) {
                 String tableTargetName = relacion.getTablaTarget().getName().toLowerCase();
                 String formattedTableTargetName = tableTargetName.substring(0, 1).toUpperCase() + tableTargetName.substring(1);
                 sb.append("        ").append(formattedTableTargetName).append(" ").append(tableTargetName).append(" = ")
                         .append(tableTargetName).append("Repository.findById(entity.get").append(formattedTableTargetName).append("().getId())\n");
-                sb.append("                .orElseThrow(() -> new RuntimeException(\"").append(tableTargetName).append(" no encontrado: \" + entity.get").append(formattedTableTargetName).append("().getNombre()));\n");
+                sb.append("                .orElseThrow(() -> new RuntimeException(\"").append(tableTargetName).append(" no encontrado: \" + entity.get").append(formattedTableTargetName).append("().getId()));\n");
                 sb.append("        existente").append(formattedTableName).append(".set").append(formattedTableTargetName).append("(").append(tableTargetName).append(");\n");
             }
         }
@@ -340,7 +313,6 @@ public class ORMService {
         }
     }
 
-    // Función para generar el controlador
     private void generarController(String rutaBase, String formattedTableName) throws IOException {
         StringBuilder sb = new StringBuilder();
         sb.append("package com.nuevo.proyectonuevo.controller;\n\n");
@@ -358,29 +330,24 @@ public class ORMService {
 
         sb.append("    @Autowired\n");
         sb.append("    private ").append(formattedTableName).append("Service ").append(formattedTableName.toLowerCase()).append("Service;\n\n");
-
-        // Método para obtener todos los registros
         sb.append("    @GetMapping(\"/get\")\n");
         sb.append("    public ResponseEntity<List<").append(formattedTableName).append(">> getAll() {\n");
         sb.append("        List<").append(formattedTableName).append("> lista = ").append(formattedTableName.toLowerCase()).append("Service.findAll();\n");
         sb.append("        return ResponseEntity.ok(lista);\n");
         sb.append("    }\n\n");
 
-        // Método para obtener un registro por ID
         sb.append("    @GetMapping(\"/get/{id}\")\n");
         sb.append("    public ResponseEntity<").append(formattedTableName).append("> getById(@PathVariable int id) {\n");
         sb.append("        Optional<").append(formattedTableName).append("> result = ").append(formattedTableName.toLowerCase()).append("Service.findById(id);\n");
         sb.append("        return result.map(ResponseEntity::ok).orElseGet(() -> ResponseEntity.status(HttpStatus.NOT_FOUND).build());\n");
         sb.append("    }\n\n");
 
-        // Método para crear un nuevo registro
         sb.append("    @PostMapping(\"/create\")\n");
         sb.append("    public ResponseEntity<").append(formattedTableName).append("> create(@RequestBody ").append(formattedTableName).append(" entity) {\n");
         sb.append("        ").append(formattedTableName).append(" nuevo = ").append(formattedTableName.toLowerCase()).append("Service.save(entity);\n");
         sb.append("        return ResponseEntity.status(HttpStatus.CREATED).body(nuevo);\n");
         sb.append("    }\n\n");
 
-        // Método para editar un registro
         sb.append("    @PutMapping(\"/edit/{id}\")\n");
         sb.append("    public ResponseEntity<").append(formattedTableName).append("> edit(@PathVariable int id, @RequestBody ").append(formattedTableName).append(" entity) {\n");
         sb.append("        try {\n");
@@ -391,7 +358,6 @@ public class ORMService {
         sb.append("        }\n");
         sb.append("    }\n\n");
 
-        // Método para eliminar un registro
         sb.append("    @DeleteMapping(\"/delete/{id}\")\n");
         sb.append("    public ResponseEntity<Void> delete(@PathVariable int id) {\n");
         sb.append("        try {\n");
@@ -415,28 +381,28 @@ public class ORMService {
         String multiplicidadSource = relacion.getMultsource(); // Ej: "1"
         String multiplicidadTarget = relacion.getMulttarget(); // Ej: "*"
 
-        return multiplicidadSource.equals("1") && multiplicidadTarget.equals("1..*");
+        return multiplicidadSource.equals("1..*") && multiplicidadTarget.equals("1");
     }
 
     private boolean esRelacionManyToOne(Relacion relacion) {
         String multiplicidadSource = relacion.getMultsource(); // Ej: "1..*"
         String multiplicidadTarget = relacion.getMulttarget(); // Ej: "1"
 
-        return multiplicidadSource.equals("1..*") && multiplicidadTarget.equals("1");
+        return multiplicidadSource.equals("1") && multiplicidadTarget.equals("1..*");
     }
 
     private boolean esRelacionOneToManySource(Relacion relacion) {
         String multiplicidadSource = relacion.getMultsource(); // Ej: "1"
         String multiplicidadTarget = relacion.getMulttarget(); // Ej: "*"
 
-        return multiplicidadTarget.equals("1") && multiplicidadSource.equals("1..*");
+        return multiplicidadTarget.equals("1..*") && multiplicidadSource.equals("1");
     }
 
     private boolean esRelacionManyToOneSource(Relacion relacion) {
         String multiplicidadSource = relacion.getMultsource(); // Ej: "1..*"
         String multiplicidadTarget = relacion.getMulttarget(); // Ej: "1"
 
-        return multiplicidadTarget.equals("1..*") && multiplicidadSource.equals("1");
+        return multiplicidadTarget.equals("1") && multiplicidadSource.equals("1..*");
     }
 
     private boolean esRelacionOneToOneSource(Relacion relacion) {

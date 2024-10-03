@@ -12,10 +12,7 @@ import java.io.BufferedWriter;
 import java.io.FileWriter;
 import java.io.IOException;
 import java.time.LocalDate;
-import java.util.Optional;
-import java.util.Random;
-import java.util.List;
-import java.util.Map;
+import java.util.*;
 import java.util.stream.Collectors;
 
 @Service
@@ -97,7 +94,7 @@ public class ProyectoService {
         Tabla tablaTarget = tablaRepo.findById(reqRes.getTablaTargetId())
                 .orElseThrow(() -> new Exception("Tabla Target no encontrada"));
 
-        Tipo tipoRelacion = tipoRepo.findById(reqRes.getTipoId())
+        Tipo tipoRelacion = tipoRepo.findByNombre(reqRes.getTipoName())
                 .orElseThrow(() -> new Exception("Tipo de relación no encontrado"));
 
         Relacion nuevaRelacion = new Relacion();
@@ -122,12 +119,10 @@ public class ProyectoService {
         Tabla tabla = tablaRepo.findById(tablaId)
                 .orElseThrow(() -> new Exception("Tabla no encontrada"));
 
-        // Actualizar los campos de la tabla
         tabla.setName(reqRes.getName());
         tabla.setTabcolor(reqRes.getTabcolor());
         Tabla tablaGuardada = tablaRepo.save(tabla);
 
-        // Obtener los nombres de los atributos que ya existen en la tabla
         List<String> nombresAtributosExistentes = tablaGuardada.getAtributos()
                 .stream()
                 .map(Atributo::getNombre)
@@ -135,13 +130,31 @@ public class ProyectoService {
 
         // Recorrer los nuevos atributos y solo guardar aquellos cuyo nombre no exista
         List<AtributoDto> atributosDTO = reqRes.getAtributos();
+        Set<String> nombresAtributosRecibidos = atributosDTO.stream()
+                .map(AtributoDto::getNombre)
+                .collect(Collectors.toSet());
+
+        List<Atributo> atributosExistentes = atributoRepo.findByTabla(tablaGuardada);
+
+        for (Atributo atributoExistente : atributosExistentes) {
+            if (!nombresAtributosRecibidos.contains(atributoExistente.getNombre())) {
+                atributoRepo.delete(atributoExistente);
+            }
+        }
+
         for (AtributoDto atributoDTO : atributosDTO) {
-            if (!nombresAtributosExistentes.contains(atributoDTO.getNombre())) {
+            Atributo atributoExistente = atributosExistentes.stream()
+                    .filter(a -> a.getNombre().equals(atributoDTO.getNombre()))
+                    .findFirst()
+                    .orElse(null);
+
+            Scope scope = scopeRepo.findByNombre(atributoDTO.getScope())
+                    .orElseThrow(() -> new RuntimeException("Scope no encontrado: " + atributoDTO.getScope()));
+            Tipo_Dato tipoDato = tipoDatoRepo.findByNombre(atributoDTO.getTipoDato())
+                    .orElseThrow(() -> new RuntimeException("Tipo de dato no encontrado: " + atributoDTO.getTipoDato()));
+
+            if (atributoExistente == null) {
                 Atributo nuevoAtributo = new Atributo();
-                Scope scope = scopeRepo.findByNombre(atributoDTO.getScope())
-                        .orElseThrow(() -> new RuntimeException("Scope no encontrado: " + atributoDTO.getScope()));
-                Tipo_Dato tipoDato = tipoDatoRepo.findByNombre(atributoDTO.getTipoDato())
-                        .orElseThrow(() -> new RuntimeException("Tipo de dato no encontrado: " + atributoDTO.getTipoDato()));
                 nuevoAtributo.setNombre(atributoDTO.getNombre());
                 nuevoAtributo.setNulleable(atributoDTO.isNulleable());
                 nuevoAtributo.setPk(atributoDTO.isPk());
@@ -149,8 +162,31 @@ public class ProyectoService {
                 nuevoAtributo.setScope(scope);
                 nuevoAtributo.setTipoDato(tipoDato);
                 atributoRepo.save(nuevoAtributo);
+            } else {
+                boolean actualizado = false;
+                if (!atributoExistente.getScope().equals(scope)) {
+                    atributoExistente.setScope(scope);
+                    actualizado = true;
+                }
+                if (!atributoExistente.getTipoDato().equals(tipoDato)) {
+                    atributoExistente.setTipoDato(tipoDato);
+                    actualizado = true;
+                }
+                if (atributoExistente.getNulleable() != atributoDTO.isNulleable()) {
+                    atributoExistente.setNulleable(atributoDTO.isNulleable());
+                    actualizado = true;
+                }
+                if (atributoExistente.getPk() != atributoDTO.isPk()) {
+                    atributoExistente.setPk(atributoDTO.isPk());
+                    actualizado = true;
+                }
+
+                if (actualizado) {
+                    atributoRepo.save(atributoExistente);
+                }
             }
         }
+
 
         return tablaGuardada;
     }
@@ -223,6 +259,42 @@ public class ProyectoService {
             response.setError(e.getMessage());
     }
         return response;
+    }
+    public ReqRes deleteTabla(int tablaId) {
+        ReqRes reqRes = new ReqRes();
+        try {
+            Optional<Tabla> tablaOpcional = tablaRepo.findById(tablaId);
+            if (tablaOpcional.isPresent()) {
+                tablaRepo.deleteById(tablaId);
+                reqRes.setStatusCode(200);
+                reqRes.setMessage("Tabla deleted successfully");
+            } else {
+                reqRes.setStatusCode(404);
+                reqRes.setMessage("Tabla not found for deletion");
+            }
+        } catch (Exception e) {
+            reqRes.setStatusCode(500);
+            reqRes.setMessage("Error occurred while deleting Tabla: " + e.getMessage());
+        }
+        return reqRes;
+    }
+    public ReqRes deleteRelacion(int relacionId) {
+        ReqRes reqRes = new ReqRes();
+        try {
+            Optional<Relacion> relacionOpcional = relacionRepo.findById(relacionId);
+            if (relacionOpcional.isPresent()) {
+                relacionRepo.deleteById(relacionId);
+                reqRes.setStatusCode(200);
+                reqRes.setMessage("Relacion deleted successfully");
+            } else {
+                reqRes.setStatusCode(404);
+                reqRes.setMessage("Relacion not found for deletion");
+            }
+        } catch (Exception e) {
+            reqRes.setStatusCode(500);
+            reqRes.setMessage("Error occurred while deleting Relacion: " + e.getMessage());
+        }
+        return reqRes;
     }
 
 }

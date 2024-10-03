@@ -21,22 +21,16 @@ public class ORMController {
     @GetMapping("/{proyectoId}/generar-entidades")
     public ResponseEntity<FileSystemResource> generarEntidades(@PathVariable int proyectoId) {
         try {
-            // Generar entidades y comprimir el proyecto
             String rutaZip = ormService.generarEntidadesEnCopia(proyectoId);
-
-            // Preparar el archivo para la descarga
             File file = new File(rutaZip);
             if (!file.exists()) {
                 return ResponseEntity.status(HttpStatus.NOT_FOUND).build();
             }
-
             HttpHeaders headers = new HttpHeaders();
             headers.add(HttpHeaders.CONTENT_DISPOSITION, "attachment; filename=" + file.getName());
-
             return ResponseEntity.ok()
                     .headers(headers)
                     .body(new FileSystemResource(file));
-
         } catch (Exception e) {
             return ResponseEntity.status(HttpStatus.INTERNAL_SERVER_ERROR)
                     .body(null);

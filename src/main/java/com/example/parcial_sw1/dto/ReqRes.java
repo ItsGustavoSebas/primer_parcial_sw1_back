@@ -60,4 +60,5 @@ public class ReqRes {
     private Integer tablaId;
     private String permiso;
     private Integer proyectoId;
+    private String tipoName;
 }
